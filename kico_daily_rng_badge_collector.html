@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kico - Daily RNG & Badge Collector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        kico: {
+                            bg: '#07090E',
+                            card: '#0F172A',
+                            border: '#1E293B',
+                            accent: '#38BDF8',
+                            legendary: '#F59E0B'
+                        }
+                    },
+                    animation: {
+                        'legendary-glow': 'legendaryGlow 2s ease-in-out infinite alternate',
+                        'mythic-pulse': 'mythicPulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'reel-shake': 'reelShake 0.2s ease-in-out'
+                    },
+                    keyframes: {
+                        legendaryGlow: {
+                            '0%': { boxShadow: '0 0 15px #F59E0B, inset 0 0 10px #F59E0B' },
+                            '100%': { boxShadow: '0 0 35px #EF4444, inset 0 0 20px #F59E0B' }
+                        },
+                        mythicPulse: {
+                            '0%, 100%': { boxShadow: '0 0 15px rgba(168, 85, 247, 0.4)' },
+                            '50%': { boxShadow: '0 0 25px rgba(236, 72, 153, 0.7)' }
+                        },
+                        reelShake: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-4px)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;0,800;1,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #07090E;
+            color: #F8FAFC;
+        }
+
+        .font-mono-num {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-btn:hover:not(:disabled) {
+            background: rgba(51, 65, 85, 0.9);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .slot-reel {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            height: 5.5rem;
+            width: 3.8rem;
+            border-radius: 0.85rem;
+            background: rgba(2, 6, 23, 0.85);
+            box-shadow: inset 0 3px 12px rgba(0, 0, 0, 0.9);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        @media (min-width: 640px) {
+            .slot-reel {
+                height: 7rem;
+                width: 5rem;
+            }
+        }
+
+        .rarity-legendary-card {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%);
+            border: 2px solid #F59E0B;
+            animation: legendaryGlow 2s ease-in-out infinite alternate;
+        }
+
+        .rarity-mythic-card {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.15) 100%);
+            border: 2px solid #A855F7;
+            animation: mythicPulse 2.5s ease-in-out infinite;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #07090E; }
+        ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-cyan-500 selection:text-black antialiased">
+
+    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 px-4 py-3.5">
+        <div class="max-w-5xl mx-auto flex items-center justify-between">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('roll')">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                    <span class="font-mono-num text-xl text-black font-black">K</span>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-amber-400 via-rose-400 to-cyan-400 font-mono-num">
+                        KICO
+                    </h1>
+                    <p class="text-[10px] text-slate-400 font-bold tracking-wider uppercase">RNG & Badge Collector</p>
+                </div>
+            </div>
+
+            <!-- Stats Bar & Quick Controls -->
+            <div class="flex items-center space-x-2 sm:space-x-4">
+                <div class="hidden md:flex items-center space-x-3 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-mono-num">
+                    <span title="Total EP Accumulated"><i class="fa-solid fa-bolt text-amber-400"></i> <span id="hdrTotalEP">0</span> EP</span>
+                    <span class="text-slate-700">|</span>
+                    <span title="Current Daily Streak"><i class="fa-solid fa-fire text-rose-500"></i> <span id="hdrStreak">0</span>d</span>
+                    <span class="text-slate-700">|</span>
+                    <span title="Badges Unlocked"><i class="fa-solid fa-award text-cyan-400"></i> <span id="hdrBadges">0/24</span></span>
+                </div>
+
+                <!-- Control Buttons -->
+                <button id="soundBtn" onclick="toggleAudio()" class="glass-btn p-2.5 rounded-xl text-slate-300 hover:text-white" title="Toggle Sound">
+                    <i id="soundIcon" class="fa-solid fa-volume-high text-base"></i>
+                </button>
+                <button onclick="openModal('helpModal')" class="glass-btn p-2.5 rounded-xl text-slate-300 hover:text-white" title="How to Play">
+                    <i class="fa-solid fa-circle-info text-base"></i>
+                </button>
+                <button onclick="openModal('statsModal')" class="glass-btn p-2.5 rounded-xl text-slate-300 hover:text-white" title="Statistics">
+                    <i class="fa-solid fa-chart-line text-base"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-4xl w-full mx-auto px-4 py-6 flex flex-col justify-start">
+        
+        <!-- Navigation Bar -->
+        <div class="flex justify-center border-b border-slate-800/80 mb-6">
+            <button id="tabRollBtn" onclick="switchTab('roll')" class="px-5 py-2.5 text-sm font-bold tracking-wide border-b-2 border-cyan-400 text-cyan-400 flex items-center gap-2">
+                <i class="fa-solid fa-dice"></i> Kico Engine
+            </button>
+            <button id="tabBadgesBtn" onclick="switchTab('badges')" class="px-5 py-2.5 text-sm font-bold tracking-wide text-slate-400 hover:text-slate-200 flex items-center gap-2 border-b-2 border-transparent">
+                <i class="fa-solid fa-vault"></i> Badge Vault
+            </button>
+            <button id="tabLeaderboardBtn" onclick="switchTab('leaderboard')" class="px-5 py-2.5 text-sm font-bold tracking-wide text-slate-400 hover:text-slate-200 flex items-center gap-2 border-b-2 border-transparent">
+                <i class="fa-solid fa-trophy"></i> Leaderboard
+            </button>
+        </div>
+
+        <!-- TAB 1: MAIN GAME ENGINE -->
+        <section id="tabRoll" class="space-y-6">
+            
+            <!-- Controls Bar -->
+            <div class="glass-panel p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                    <button id="modeDailyBtn" onclick="setMode('daily')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md">
+                        <i class="fa-solid fa-calendar-check mr-1"></i> Daily Kico
+                    </button>
+                    <button id="modePracticeBtn" onclick="setMode('practice')" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-gamepad mr-1"></i> Practice Mode
+                    </button>
+                </div>
+
+                <div id="statusHeaderRight" class="text-right">
+                    <div id="countdownContainer" class="flex items-center space-x-2 text-xs font-medium text-slate-400">
+                        <span>Reset UTC:</span>
+                        <span id="countdownTimer" class="font-mono-num text-cyan-400 font-bold text-xs bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">00:00:00</span>
+                    </div>
+                    <div id="practiceBadge" class="hidden text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-lg">
+                        <i class="fa-solid fa-bolt mr-1"></i> Practice Mode (Unlimited Spins)
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLOT MACHINE CONTAINER -->
+            <div id="slotMainPanel" class="glass-panel p-6 sm:p-10 rounded-3xl text-center relative overflow-hidden border border-slate-800 shadow-2xl transition-all duration-500">
+                <div class="absolute -top-28 -left-28 w-56 h-56 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -bottom-28 -right-28 w-56 h-56 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="inline-block px-3 py-1 bg-slate-950 rounded-full border border-slate-800 text-xs text-slate-400 mb-6 font-mono-num">
+                    Range: <span class="text-cyan-400 font-bold">000000</span> &mdash; <span class="text-cyan-400 font-bold">999999</span>
+                </div>
+
+                <!-- 6 SLOT DIGITAL REELS -->
+                <div id="slotDisplay" class="flex justify-center items-center space-x-1.5 sm:space-x-3 my-4 font-mono-num font-black text-4xl sm:text-6xl text-cyan-300">
+                    <!-- Javascript generates 6 slot reels -->
+                </div>
+
+                <!-- Roll Button -->
+                <div class="mt-8 flex flex-col items-center justify-center">
+                    <button id="rollBtn" onclick="triggerRoll()" class="relative group px-10 py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-rose-600 to-cyan-500 font-black text-lg text-slate-950 shadow-xl shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none disabled:transform-none">
+                        <span class="flex items-center gap-3">
+                            <i id="rollBtnIcon" class="fa-solid fa-dice-five text-xl group-hover:rotate-180 transition-transform duration-500"></i>
+                            <span id="rollBtnText">SPIN KICO RNG</span>
+                        </span>
+                    </button>
+                    <p id="alreadyRolledMsg" class="hidden mt-3 text-xs text-amber-400 font-medium">
+                        <i class="fa-solid fa-circle-check mr-1"></i> You completed today's Daily Kico Roll! Check back tomorrow or switch to Practice Mode.
+                    </p>
+                </div>
+            </div>
+
+            <div id="resultContainer" class="hidden transition-all duration-500 space-y-6">
+                <!-- Rarity Card Banner -->
+                <div id="rarityCard" class="glass-panel p-6 rounded-2xl flex flex-wrap items-center justify-between gap-4 transition-all border-l-8 border-gray-500">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span id="rarityBadge" class="px-3 py-1 rounded-md text-xs font-black uppercase tracking-wider text-black bg-slate-400">
+                                COMMON
+                            </span>
+                            <span class="text-xs text-slate-400">Entropy Tier</span>
+                        </div>
+                        <h2 id="totalEPDisplay" class="text-3xl font-black font-mono-num mt-1 text-white">0 <span class="text-sm font-normal text-slate-400">EP</span></h2>
+                    </div>
+
+                    <button onclick="shareResult()" class="glass-btn px-5 py-2.5 rounded-xl text-sm font-bold text-white flex items-center gap-2 hover:bg-cyan-600/30 border-cyan-500/40">
+                        <i class="fa-solid fa-share-nodes text-cyan-400"></i> Share Kico Result
+                    </button>
+                </div>
+
+                <!-- Badges Grid Detected -->
+                <div class="glass-panel p-6 rounded-2xl">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-microchip text-cyan-400"></i> Quantum Math Traits Detected
+                    </h3>
+                    <div id="badgesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Dynamic Badges Inserted Here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tabBadges" class="hidden space-y-6">
+            <div class="glass-panel p-6 rounded-2xl">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-white">Badge Vault Catalog</h2>
+                        <p class="text-xs text-slate-400">Discover all rare math quirks, sequences, and legendary meme numbers.</p>
+                    </div>
+                    <div class="text-xs bg-slate-950 px-4 py-2 rounded-xl border border-slate-800 text-slate-300 font-mono-num">
+                        Vault Unlocked: <span id="badgesUnlockedCount" class="text-cyan-400 font-bold">0</span> / <span id="badgesTotalCount">0</span>
+                    </div>
+                </div>
+
+                <!-- Rarity Filter Tabs -->
+                <div class="flex flex-wrap gap-2 mb-6 text-xs font-bold">
+                    <button onclick="filterVault('ALL')" class="px-3 py-1.5 rounded-lg bg-slate-800 text-white">ALL</button>
+                    <button onclick="filterVault('LEGENDARY')" class="px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">LEGENDARY</button>
+                    <button onclick="filterVault('MYTHIC')" class="px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30">MYTHIC</button>
+                    <button onclick="filterVault('EPIC')" class="px-3 py-1.5 rounded-lg bg-pink-500/20 text-pink-400 border border-pink-500/30">EPIC</button>
+                    <button onclick="filterVault('RARE')" class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">RARE</button>
+                </div>
+
+                <div id="allBadgesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Dynamically generated vault -->
+                </div>
+            </div>
+        </section>
+
+        <section id="tabLeaderboard" class="hidden space-y-6">
+            <div class="glass-panel p-6 rounded-2xl">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-white">Daily Global High Scores</h2>
+                        <p class="text-xs text-slate-400">Highest Entropy Point (EP) rolls recorded today</p>
+                    </div>
+                    <span class="text-xs font-mono-num bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-3 py-1 rounded-lg">UTC Reset</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-950 text-slate-400 border-b border-slate-800">
+                            <tr>
+                                <th class="py-3 px-4">Rank</th>
+                                <th class="py-3 px-4">Player</th>
+                                <th class="py-3 px-4">Number</th>
+                                <th class="py-3 px-4">Entropy Points</th>
+                                <th class="py-3 px-4">Rarity</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody" class="divide-y divide-slate-800/60 font-mono-num">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="glass-panel border-t border-slate-800/80 py-4 px-4 text-center text-xs text-slate-500">
+        <div class="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>Kico &copy; 2026 &mdash; Daily Random Number Engine</div>
+            <div class="flex items-center space-x-4">
+                <span>Created for Pure Probability</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- MODAL: HELP -->
+    <div id="helpModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="glass-panel max-w-lg w-full p-6 rounded-3xl border border-slate-800 relative max-h-[90vh] overflow-y-auto">
+            <button onclick="closeModal('helpModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white p-2">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            
+            <h2 class="text-xl font-black text-white mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-circle-question text-amber-400"></i> How to Play Kico
+            </h2>
+
+            <div class="space-y-4 text-sm text-slate-300 leading-relaxed">
+                <p>Every day at midnight UTC, a new random 6-digit number (<strong class="text-white">000000 &mdash; 999999</strong>) is generated.</p>
+                
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <h3 class="font-bold text-cyan-400">Entropy Points (EP) Engine</h3>
+                    <p class="text-xs text-slate-400">Your number is evaluated for mathematical patterns, prime numbers, sequences, and meme combinations. The rarer the traits, the higher your EP score!</p>
+                </div>
+
+                <div class="space-y-2">
+                    <h3 class="font-bold text-white">Rarity Tiers & Probabilities</h3>
+                    <div class="grid grid-cols-2 gap-2 text-xs font-mono-num">
+                        <div class="p-2 rounded bg-slate-900 border border-slate-800"><span class="text-slate-400 font-bold">COMMON:</span> ~50%+</div>
+                        <div class="p-2 rounded bg-emerald-950/40 border border-emerald-800/50"><span class="text-emerald-400 font-bold">UNCOMMON:</span> ~25%</div>
+                        <div class="p-2 rounded bg-blue-950/40 border border-blue-800/50"><span class="text-blue-400 font-bold">RARE:</span> ~10%</div>
+                        <div class="p-2 rounded bg-pink-950/40 border border-pink-800/50"><span class="text-pink-400 font-bold">EPIC:</span> ~3%</div>
+                        <div class="p-2 rounded bg-purple-950/60 border border-purple-800/50"><span class="text-purple-400 font-bold">MYTHIC:</span> ~0.1%</div>
+                        <div class="p-2 rounded bg-amber-950/80 border border-amber-500/80 animate-pulse"><span class="text-amber-400 font-black">LEGENDARY:</span> 0.01% (1 in 10,000)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: STATS -->
+    <div id="statsModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="glass-panel max-w-md w-full p-6 rounded-3xl border border-slate-800 relative">
+            <button onclick="closeModal('statsModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white p-2">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            
+            <h2 class="text-xl font-black text-white mb-6 text-center">Your Kico Statistics</h2>
+
+            <div class="grid grid-cols-2 gap-4 text-center mb-6">
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <div id="statCurrentStreak" class="text-3xl font-black text-rose-500 font-mono-num">0</div>
+                    <div class="text-xs text-slate-400 mt-1">Current Streak</div>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <div id="statMaxStreak" class="text-3xl font-black text-amber-400 font-mono-num">0</div>
+                    <div class="text-xs text-slate-400 mt-1">Max Streak</div>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <div id="statTotalEP" class="text-3xl font-black text-cyan-400 font-mono-num">0</div>
+                    <div class="text-xs text-slate-400 mt-1">Total Daily EP</div>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                    <div id="statTotalSpins" class="text-3xl font-black text-purple-400 font-mono-num">0</div>
+                    <div class="text-xs text-slate-400 mt-1">Total Spins</div>
+                </div>
+            </div>
+
+            <div id="lastDailySummary" class="text-xs text-center text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                Last Daily Kico Roll: <span id="statLastRollNum" class="text-white font-bold font-mono-num">None</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* WEB AUDIO API SOUND ENGINE */
+        class KicoAudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+            }
+
+            playClick() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(900, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.04);
+                gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.04);
+            }
+
+            playTick() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(150 + Math.random() * 60, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.03);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.03);
+            }
+
+            playBadgeUnlock() {
+                if (!this.enabled) return;
+                this.init();
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.07);
+                    gain.gain.setValueAtTime(0.1, this.ctx.currentTime + idx * 0.07);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.07 + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.07);
+                    osc.stop(this.ctx.currentTime + idx * 0.07 + 0.25);
+                });
+            }
+
+            playLegendaryFanfare() {
+                if (!this.enabled) return;
+                this.init();
+                const notes = [440, 554.37, 659.25, 880, 1108.73, 1318.51];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.09);
+                    gain.gain.setValueAtTime(0.12, this.ctx.currentTime + idx * 0.09);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.09 + 0.5);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.09);
+                    osc.stop(this.ctx.currentTime + idx * 0.09 + 0.5);
+                });
+            }
+        }
+
+        const audio = new KicoAudioEngine();
+
+        function toggleAudio() {
+            audio.enabled = !audio.enabled;
+            const icon = document.getElementById('soundIcon');
+            if (audio.enabled) {
+                icon.className = 'fa-solid fa-volume-high text-base';
+                audio.playClick();
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark text-base text-slate-500';
+            }
+        }
+
+        /* MASTER BADGES DEFINITION */
+        const MASTER_BADGES = {
+            // LEGENDARY BADGES (0.01% tier)
+            LEGENDARY_777: { id: 'LEGENDARY_777', name: '777777 Jackpot', icon: 'fa-crown', ep: 2500, rarity: 'LEGENDARY', desc: 'Rolled the ultimate 777777 jackpot!' },
+            LEGENDARY_ZERO: { id: 'LEGENDARY_ZERO', name: 'Golden Zero (000000)', icon: 'fa-circle-notch', ep: 2500, rarity: 'LEGENDARY', desc: 'Perfect 000000 absolute origin roll.' },
+            LEGENDARY_LADDER: { id: 'LEGENDARY_LADDER', name: 'Golden Ladder (123456)', icon: 'fa-stairs', ep: 2200, rarity: 'LEGENDARY', desc: 'Flawless 1-2-3-4-5-6 ascending sequence.' },
+            LEGENDARY_SOLID: { id: 'LEGENDARY_SOLID', name: 'Perfect Monolith', icon: 'fa-gem', ep: 2000, rarity: 'LEGENDARY', desc: 'All 6 digits are completely identical.' },
+
+            // MYTHIC BADGES (0.1% tier)
+            MYTHIC_PALINDROME: { id: 'MYTHIC_PALINDROME', name: 'Golden Mirror', icon: 'fa-repeat', ep: 1200, rarity: 'MYTHIC', desc: 'Perfect 6-digit symmetrical palindrome.' },
+            MYTHIC_PENTA: { id: 'MYTHIC_PENTA', name: 'Penta Digits', icon: 'fa-cubes-stacked', ep: 1000, rarity: 'MYTHIC', desc: 'Contains 5 of the exact same digit.' },
+            MYTHIC_DESC_LADDER: { id: 'MYTHIC_DESC_LADDER', name: 'Descending Countdown (654321)', icon: 'fa-arrow-trend-down', ep: 1100, rarity: 'MYTHIC', desc: 'Exact 6-digit descending sequence.' },
+
+            // EPIC BADGES (3% tier)
+            EPIC_QUAD: { id: 'EPIC_QUAD', name: 'Quadruple Digits', icon: 'fa-cubes', ep: 500, rarity: 'EPIC', desc: 'Contains 4 of the exact same digit.' },
+            EPIC_ALT: { id: 'EPIC_ALT', name: 'Binary Alternator', icon: 'fa-arrows-left-right', ep: 450, rarity: 'EPIC', desc: 'Strictly alternating digits (e.g., 242424).' },
+            EPIC_PRIME: { id: 'EPIC_PRIME', name: 'Prime Anomaly', icon: 'fa-atom', ep: 400, rarity: 'EPIC', desc: 'The 6-digit number is a prime number.' },
+            EPIC_MEME_69420: { id: 'EPIC_MEME_69420', name: 'Blessed 69420', icon: 'fa-fire', ep: 694, rarity: 'EPIC', desc: 'Contains 69420 or 42069.' },
+
+            // RARE BADGES (10% tier)
+            RARE_TRIPLE: { id: 'RARE_TRIPLE', name: 'Triple Digits', icon: 'fa-clone', ep: 250, rarity: 'RARE', desc: 'Contains 3 of the exact same digit.' },
+            RARE_RUN_4: { id: 'RARE_RUN_4', name: '4-Digit Run', icon: 'fa-arrow-trend-up', ep: 220, rarity: 'RARE', desc: 'Contains a 4-digit consecutive sequence.' },
+            RARE_MEME_80085: { id: 'RARE_MEME_80085', name: 'Calculator Classic', icon: 'fa-calculator', ep: 300, rarity: 'RARE', desc: 'Contains 80085.' },
+            RARE_MEME_1337: { id: 'RARE_MEME_1337', name: 'LeetSpeak (1337)', icon: 'fa-terminal', ep: 250, rarity: 'RARE', desc: 'Contains 1337.' },
+            RARE_EXTREME_HIGH: { id: 'RARE_EXTREME_HIGH', name: 'Top 1% Sovereign', icon: 'fa-mountain-city', ep: 300, rarity: 'RARE', desc: 'Number is >= 990000.' },
+            RARE_EXTREME_LOW: { id: 'RARE_EXTREME_LOW', name: 'Abyssal Low', icon: 'fa-anchor', ep: 300, rarity: 'RARE', desc: 'Number is <= 10000.' },
+
+            // UNCOMMON BADGES (25% tier)
+            UNCOMMON_DOUBLE_PAIR: { id: 'UNCOMMON_DOUBLE_PAIR', name: 'Double Pair', icon: 'fa-layer-group', ep: 120, rarity: 'UNCOMMON', desc: 'Contains two distinct pairs of digits.' },
+            UNCOMMON_EVEN_STREAK: { id: 'UNCOMMON_EVEN_STREAK', name: 'All Evens', icon: 'fa-border-all', ep: 150, rarity: 'UNCOMMON', desc: 'All 6 digits are even numbers.' },
+            UNCOMMON_ODD_STREAK: { id: 'UNCOMMON_ODD_STREAK', name: 'All Odds', icon: 'fa-border-none', ep: 150, rarity: 'UNCOMMON', desc: 'All 6 digits are odd numbers.' },
+            UNCOMMON_MEME_777: { id: 'UNCOMMON_MEME_777', name: 'Lucky 7s', icon: 'fa-clover', ep: 140, rarity: 'UNCOMMON', desc: 'Contains multiple 7s.' }
+        };
+
+        function isPrime(num) {
+            if (num <= 1) return false;
+            if (num <= 3) return true;
+            if (num % 2 === 0 || num % 3 === 0) return false;
+            for (let i = 5; i * i <= num; i += 6) {
+                if (num % i === 0 || num % (i + 2) === 0) return false;
+            }
+            return true;
+        }
+
+        // Mathematical Entropy & Rarity Evaluator Engine
+        function analyzeKicoNumber(num) {
+            const str = num.toString().padStart(6, '0');
+            const detected = [];
+
+            // 1. LEGENDARY CHECKS
+            if (str === '777777') detected.push(MASTER_BADGES.LEGENDARY_777);
+            if (str === '000000') detected.push(MASTER_BADGES.LEGENDARY_ZERO);
+            if (str === '123456') detected.push(MASTER_BADGES.LEGENDARY_LADDER);
+            if (new Set(str).size === 1 && str !== '777777' && str !== '000000') detected.push(MASTER_BADGES.LEGENDARY_SOLID);
+
+            // 2. MYTHIC CHECKS
+            if (str === str.split('').reverse().join('') && !detected.some(b => b.rarity === 'LEGENDARY')) {
+                detected.push(MASTER_BADGES.MYTHIC_PALINDROME);
+            }
+            if (str === '654321') detected.push(MASTER_BADGES.MYTHIC_DESC_LADDER);
+
+            const counts = {};
+            for (let c of str) counts[c] = (counts[c] || 0) + 1;
+            const maxFreq = Math.max(...Object.values(counts));
+
+            if (maxFreq === 5) detected.push(MASTER_BADGES.MYTHIC_PENTA);
+
+            // 3. EPIC CHECKS
+            if (maxFreq === 4) detected.push(MASTER_BADGES.EPIC_QUAD);
+            if (str[0] === str[2] && str[2] === str[4] && str[1] === str[3] && str[3] === str[5] && str[0] !== str[1]) {
+                detected.push(MASTER_BADGES.EPIC_ALT);
+            }
+            if (isPrime(num)) detected.push(MASTER_BADGES.EPIC_PRIME);
+            if (str.includes('69420') || str.includes('42069')) detected.push(MASTER_BADGES.EPIC_MEME_69420);
+
+            // 4. RARE CHECKS
+            if (maxFreq === 3 && !detected.some(b => b.ep > 300)) detected.push(MASTER_BADGES.RARE_TRIPLE);
+            if (str.includes('80085')) detected.push(MASTER_BADGES.RARE_MEME_80085);
+            if (str.includes('1337')) detected.push(MASTER_BADGES.RARE_MEME_1337);
+            if (num >= 990000) detected.push(MASTER_BADGES.RARE_EXTREME_HIGH);
+            if (num <= 10000) detected.push(MASTER_BADGES.RARE_EXTREME_LOW);
+
+            // 5. UNCOMMON CHECKS
+            const pairs = Object.values(counts).filter(c => c >= 2).length;
+            if (pairs >= 2 && maxFreq < 4) detected.push(MASTER_BADGES.UNCOMMON_DOUBLE_PAIR);
+            if ([...str].every(d => parseInt(d) % 2 === 0)) detected.push(MASTER_BADGES.UNCOMMON_EVEN_STREAK);
+            if ([...str].every(d => parseInt(d) % 2 !== 0)) detected.push(MASTER_BADGES.UNCOMMON_ODD_STREAK);
+            if ((counts['7'] || 0) >= 2 && !str.includes('777777')) detected.push(MASTER_BADGES.UNCOMMON_MEME_777);
+
+            // Total Entropy Points Calculation
+            let totalEP = detected.reduce((sum, b) => sum + b.ep, 0);
+            totalEP += Math.floor((num % 83) + (new Set(str).size * 8));
+
+            // Determine Highest Rarity Tier Achieved
+            let rarity = { name: 'COMMON', bg: 'bg-slate-400', border: 'border-slate-500' };
+            if (detected.some(b => b.rarity === 'LEGENDARY') || totalEP >= 2000) {
+                rarity = { name: 'LEGENDARY', bg: 'bg-amber-400', border: 'border-amber-500' };
+            } else if (detected.some(b => b.rarity === 'MYTHIC') || totalEP >= 1000) {
+                rarity = { name: 'MYTHIC', bg: 'bg-purple-400', border: 'border-purple-500' };
+            } else if (detected.some(b => b.rarity === 'EPIC') || totalEP >= 450) {
+                rarity = { name: 'EPIC', bg: 'bg-pink-400', border: 'border-pink-500' };
+            } else if (detected.some(b => b.rarity === 'RARE') || totalEP >= 220) {
+                rarity = { name: 'RARE', bg: 'bg-blue-400', border: 'border-blue-500' };
+            } else if (detected.some(b => b.rarity === 'UNCOMMON') || totalEP >= 100) {
+                rarity = { name: 'UNCOMMON', bg: 'bg-emerald-400', border: 'border-emerald-500' };
+            }
+
+            return { num, totalEP, detected, rarity, str };
+        }
+
+        /* STATE MANAGEMENT */
+        let state = {
+            mode: 'daily',
+            isRolling: false,
+            unlockedBadges: new Set(),
+            vaultFilter: 'ALL',
+            stats: {
+                currentStreak: 0,
+                maxStreak: 0,
+                totalEP: 0,
+                totalSpins: 0,
+                lastDailyDate: null,
+                lastDailyNum: null
+            }
+        };
+
+        function getUTCDayKey() {
+            const d = new Date();
+            return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+        }
+
+        function loadStorage() {
+            const savedStats = localStorage.getItem('kico_stats');
+            if (savedStats) state.stats = JSON.parse(savedStats);
+
+            const savedBadges = localStorage.getItem('kico_unlocked_badges');
+            if (savedBadges) state.unlockedBadges = new Set(JSON.parse(savedBadges));
+
+            updateStatsDisplay();
+        }
+
+        function saveStorage() {
+            localStorage.setItem('kico_stats', JSON.stringify(state.stats));
+            localStorage.setItem('kico_unlocked_badges', JSON.stringify(Array.from(state.unlockedBadges)));
+            updateStatsDisplay();
+        }
+
+        function initSlotDisplay(value = "000000") {
+            const container = document.getElementById('slotDisplay');
+            container.innerHTML = '';
+            const padded = value.toString().padStart(6, '0');
+
+            for (let i = 0; i < 6; i++) {
+                const reel = document.createElement('div');
+                reel.className = 'slot-reel font-mono-num font-black border border-cyan-500/20 text-cyan-300';
+                reel.id = `reel-${i}`;
+                reel.innerText = padded[i];
+                container.appendChild(reel);
+            }
+        }
+
+        function triggerRoll() {
+            if (state.isRolling) return;
+
+            const todayKey = getUTCDayKey();
+            if (state.mode === 'daily' && state.stats.lastDailyDate === todayKey) {
+                return;
+            }
+
+            state.isRolling = true;
+            document.getElementById('rollBtn').disabled = true;
+            document.getElementById('resultContainer').classList.add('hidden');
+            audio.playClick();
+
+            let finalNumber;
+            if (state.mode === 'daily') {
+                const seedStr = todayKey + "-kico-salt-key-2026";
+                let hash = 0;
+                for (let i = 0; i < seedStr.length; i++) {
+                    hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+                    hash |= 0;
+                }
+                finalNumber = Math.abs(hash) % 1000000;
+            } else {
+                finalNumber = Math.floor(Math.random() * 1000000);
+            }
+
+            state.stats.totalSpins++;
+            const analysis = analyzeKicoNumber(finalNumber);
+
+            animateSlotMachine(finalNumber, () => {
+                state.isRolling = false;
+                document.getElementById('rollBtn').disabled = false;
+                displayResults(analysis);
+
+                if (state.mode === 'daily') {
+                    handleDailyCompletion(analysis);
+                } else {
+                    saveStorage();
+                }
+            });
+        }
+
+        function animateSlotMachine(targetNum, callback) {
+            const paddedTarget = targetNum.toString().padStart(6, '0');
+            const reels = [];
+            for (let i = 0; i < 6; i++) {
+                reels.push(document.getElementById(`reel-${i}`));
+            }
+
+            let steps = 0;
+            const maxSteps = 24;
+
+            const interval = setInterval(() => {
+                steps++;
+                audio.playTick();
+
+                reels.forEach((reel, idx) => {
+                    if (steps > maxSteps - (6 - idx) * 3) {
+                        reel.innerText = paddedTarget[idx];
+                        reel.classList.add('text-cyan-400', 'border-cyan-400');
+                    } else {
+                        reel.innerText = Math.floor(Math.random() * 10);
+                        reel.classList.remove('text-cyan-400', 'border-cyan-400');
+                    }
+                });
+
+                if (steps >= maxSteps) {
+                    clearInterval(interval);
+                    callback();
+                }
+            }, 65);
+        }
+
+        function displayResults(analysis) {
+            const container = document.getElementById('resultContainer');
+            const slotPanel = document.getElementById('slotMainPanel');
+            const rarityCard = document.getElementById('rarityCard');
+            const rarityBadge = document.getElementById('rarityBadge');
+            const epDisplay = document.getElementById('totalEPDisplay');
+            const badgesGrid = document.getElementById('badgesGrid');
+
+            // Set Panel Aesthetics based on Rarity
+            slotPanel.className = 'glass-panel p-6 sm:p-10 rounded-3xl text-center relative overflow-hidden border border-slate-800 shadow-2xl transition-all duration-500';
+            if (analysis.rarity.name === 'LEGENDARY') {
+                slotPanel.classList.add('rarity-legendary-card');
+            } else if (analysis.rarity.name === 'MYTHIC') {
+                slotPanel.classList.add('rarity-mythic-card');
+            }
+
+            // Set Rarity Banner
+            rarityBadge.innerText = analysis.rarity.name;
+            rarityBadge.className = `px-3 py-1 rounded-md text-xs font-black uppercase tracking-wider text-black ${analysis.rarity.bg}`;
+            rarityCard.className = `glass-panel p-6 rounded-2xl border-l-8 ${analysis.rarity.border} flex flex-wrap items-center justify-between gap-4`;
+
+            // EP Animated Count Up
+            let currentEP = 0;
+            epDisplay.innerHTML = `0 <span class="text-sm font-normal text-slate-400">EP</span>`;
+            
+            badgesGrid.innerHTML = '';
+            if (analysis.detected.length === 0) {
+                badgesGrid.innerHTML = `<div class="col-span-full text-xs text-slate-500 italic">No rare math traits detected in this roll.</div>`;
+            } else {
+                analysis.detected.forEach((badge) => {
+                    state.unlockedBadges.add(badge.id);
+
+                    const badgeCard = document.createElement('div');
+                    badgeCard.className = 'flex items-center space-x-3 p-3 rounded-xl bg-slate-950/80 border border-slate-800';
+                    badgeCard.innerHTML = `
+                        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center justify-center text-lg flex-shrink-0">
+                            <i class="fa-solid ${badge.icon}"></i>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-sm font-bold text-white">${badge.name}</h4>
+                                <span class="text-xs font-mono-num font-bold text-cyan-400">+${badge.ep} EP</span>
+                            </div>
+                            <p class="text-xs text-slate-400">${badge.desc}</p>
+                        </div>
+                    `;
+                    badgesGrid.appendChild(badgeCard);
+                });
+            }
+
+            container.classList.remove('hidden');
+
+            const epStep = Math.max(1, Math.floor(analysis.totalEP / 25));
+            const epInterval = setInterval(() => {
+                currentEP += epStep;
+                if (currentEP >= analysis.totalEP) {
+                    currentEP = analysis.totalEP;
+                    clearInterval(epInterval);
+                }
+                epDisplay.innerHTML = `${currentEP} <span class="text-sm font-normal text-slate-400">EP</span>`;
+            }, 30);
+
+            if (analysis.rarity.name === 'LEGENDARY') {
+                audio.playLegendaryFanfare();
+            } else {
+                audio.playBadgeUnlock();
+            }
+
+            saveStorage();
+            renderBadgesVault();
+        }
+
+        function handleDailyCompletion(analysis) {
+            const todayKey = getUTCDayKey();
+            state.stats.lastDailyDate = todayKey;
+            state.stats.lastDailyNum = analysis.num;
+            state.stats.totalEP += analysis.totalEP;
+
+            const yesterday = new Date();
+            yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+            const yesterdayKey = `${yesterday.getUTCFullYear()}-${yesterday.getUTCMonth() + 1}-${yesterday.getUTCDate()}`;
+
+            if (state.stats.lastDailyDate === yesterdayKey) {
+                state.stats.currentStreak++;
+            } else {
+                state.stats.currentStreak = 1;
+            }
+
+            if (state.stats.currentStreak > state.stats.maxStreak) {
+                state.stats.maxStreak = state.stats.currentStreak;
+            }
+
+            saveStorage();
+            checkDailyStatus();
+        }
+
+        function checkDailyStatus() {
+            const todayKey = getUTCDayKey();
+            const rolledToday = state.stats.lastDailyDate === todayKey;
+
+            if (state.mode === 'daily') {
+                if (rolledToday) {
+                    document.getElementById('rollBtn').disabled = true;
+                    document.getElementById('alreadyRolledMsg').classList.remove('hidden');
+                    if (state.stats.lastDailyNum !== null && !state.isRolling) {
+                        initSlotDisplay(state.stats.lastDailyNum);
+                    }
+                } else {
+                    document.getElementById('rollBtn').disabled = false;
+                    document.getElementById('alreadyRolledMsg').classList.add('hidden');
+                }
+            } else {
+                document.getElementById('rollBtn').disabled = false;
+                document.getElementById('alreadyRolledMsg').classList.add('hidden');
+            }
+        }
+
+        function setMode(mode) {
+            audio.playClick();
+            state.mode = mode;
+            const dailyBtn = document.getElementById('modeDailyBtn');
+            const practiceBtn = document.getElementById('modePracticeBtn');
+            const practiceBadge = document.getElementById('practiceBadge');
+            const countdownContainer = document.getElementById('countdownContainer');
+
+            if (mode === 'daily') {
+                dailyBtn.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md';
+                practiceBtn.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+                practiceBadge.classList.add('hidden');
+                countdownContainer.classList.remove('hidden');
+            } else {
+                practiceBtn.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md';
+                dailyBtn.className = 'px-4 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-400 hover:text-white';
+                practiceBadge.classList.remove('hidden');
+                countdownContainer.classList.add('hidden');
+            }
+
+            checkDailyStatus();
+        }
+
+        function updateCountdown() {
+            const now = new Date();
+            const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+            const diff = tomorrow - now;
+
+            const hours = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+            const secs = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
+
+            document.getElementById('countdownTimer').innerText = `${hours}:${mins}:${secs}`;
+        }
+        setInterval(updateCountdown, 1000);
+
+        function switchTab(tab) {
+            audio.playClick();
+            ['roll', 'badges', 'leaderboard'].forEach(t => {
+                const el = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}Btn`);
+                if (t === tab) {
+                    el.classList.remove('hidden');
+                    btn.className = 'px-5 py-2.5 text-sm font-bold tracking-wide border-b-2 border-cyan-400 text-cyan-400 flex items-center gap-2';
+                } else {
+                    el.classList.add('hidden');
+                    btn.className = 'px-5 py-2.5 text-sm font-bold tracking-wide text-slate-400 hover:text-slate-200 flex items-center gap-2 border-b-2 border-transparent';
+                }
+            });
+
+            if (tab === 'badges') renderBadgesVault();
+            if (tab === 'leaderboard') renderLeaderboard();
+        }
+
+        function filterVault(rarity) {
+            audio.playClick();
+            state.vaultFilter = rarity;
+            renderBadgesVault();
+        }
+
+        function renderBadgesVault() {
+            const grid = document.getElementById('allBadgesGrid');
+            grid.innerHTML = '';
+
+            const badgesList = Object.values(MASTER_BADGES);
+            document.getElementById('badgesTotalCount').innerText = badgesList.length;
+            document.getElementById('badgesUnlockedCount').innerText = state.unlockedBadges.size;
+
+            const filtered = state.vaultFilter === 'ALL' 
+                ? badgesList 
+                : badgesList.filter(b => b.rarity === state.vaultFilter);
+
+            filtered.forEach(badge => {
+                const isUnlocked = state.unlockedBadges.has(badge.id);
+                const card = document.createElement('div');
+                card.className = `p-4 rounded-2xl border flex items-center space-x-4 ${
+                    isUnlocked 
+                    ? 'bg-slate-900/90 border-cyan-500/40' 
+                    : 'bg-slate-950/40 border-slate-800 opacity-40 grayscale'
+                }`;
+
+                card.innerHTML = `
+                    <div class="w-12 h-12 rounded-xl ${isUnlocked ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' : 'bg-slate-800 text-slate-600 border-slate-700'} border flex items-center justify-center text-xl flex-shrink-0">
+                        <i class="fa-solid ${badge.icon}"></i>
+                    </div>
+                    <div class="flex-grow">
+                        <div class="flex justify-between items-center">
+                            <h4 class="text-sm font-bold text-white">${badge.name}</h4>
+                            <span class="text-xs font-mono-num ${isUnlocked ? 'text-cyan-400' : 'text-slate-600'}">+${badge.ep} EP</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">${badge.desc}</p>
+                        <span class="inline-block mt-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded ${isUnlocked ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-500'}">
+                            ${badge.rarity} &bull; ${isUnlocked ? 'UNLOCKED' : 'LOCKED'}
+                        </span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function renderLeaderboard() {
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+
+            const mockPlayers = [
+                { name: 'KicoMaster', num: 777777, ep: 2500, rarity: 'LEGENDARY' },
+                { name: 'QuantumRNG', num: 123456, ep: 2200, rarity: 'LEGENDARY' },
+                { name: 'CyberKico', num: 999999, ep: 1400, rarity: 'MYTHIC' },
+                { name: 'EntropyGod', num: 69420, ep: 694, rarity: 'EPIC' },
+                { name: 'NullPointer', num: 80085, ep: 300, rarity: 'RARE' },
+            ];
+
+            if (state.stats.lastDailyDate === getUTCDayKey() && state.stats.lastDailyNum !== null) {
+                const userAnalysis = analyzeKicoNumber(state.stats.lastDailyNum);
+                mockPlayers.push({
+                    name: 'YOU (Player)',
+                    num: userAnalysis.num,
+                    ep: userAnalysis.totalEP,
+                    rarity: userAnalysis.rarity.name,
+                    isUser: true
+                });
+            }
+
+            mockPlayers.sort((a, b) => b.ep - a.ep);
+
+            mockPlayers.forEach((p, rank) => {
+                const tr = document.createElement('tr');
+                tr.className = p.isUser ? 'bg-cyan-950/40 font-bold border-l-4 border-cyan-400' : 'hover:bg-slate-900/50';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-slate-400">#${rank + 1}</td>
+                    <td class="py-3 px-4 ${p.isUser ? 'text-cyan-300' : 'text-white'}">${p.name}</td>
+                    <td class="py-3 px-4 text-slate-300">${p.num.toString().padStart(6, '0')}</td>
+                    <td class="py-3 px-4 text-cyan-400">${p.ep} EP</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${getRarityBg(p.rarity)} text-black">
+                            ${p.rarity}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function getRarityBg(rarityName) {
+            switch (rarityName) {
+                case 'LEGENDARY': return 'bg-amber-400';
+                case 'MYTHIC': return 'bg-purple-400';
+                case 'EPIC': return 'bg-pink-400';
+                case 'RARE': return 'bg-blue-400';
+                case 'UNCOMMON': return 'bg-emerald-400';
+                default: return 'bg-slate-400';
+            }
+        }
+
+        function shareResult() {
+            audio.playClick();
+            if (state.stats.lastDailyNum === null && state.mode === 'daily') return;
+
+            const targetNum = state.mode === 'daily' ? state.stats.lastDailyNum : document.getElementById('slotDisplay').innerText.replace(/\s+/g, '');
+            const analysis = analyzeKicoNumber(parseInt(targetNum));
+
+            const shareText = `Kico Daily Roll 🎲\n` +
+                              `Number: ${targetNum.toString().padStart(6, '0')}\n` +
+                              `Entropy: ${analysis.totalEP} EP (${analysis.rarity.name})\n` +
+                              `Traits: ${analysis.detected.map(b => b.name).join(', ') || 'None'}\n` +
+                              `Play at Kico RNG Engine`;
+
+            const textarea = document.createElement('textarea');
+            textarea.value = shareText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            alert('Kico result copied to clipboard! Share it with your friends.');
+        }
+
+        function updateStatsDisplay() {
+            document.getElementById('statCurrentStreak').innerText = state.stats.currentStreak;
+            document.getElementById('statMaxStreak').innerText = state.stats.maxStreak;
+            document.getElementById('statTotalEP').innerText = state.stats.totalEP;
+            document.getElementById('statTotalSpins').innerText = state.stats.totalSpins;
+            document.getElementById('statLastRollNum').innerText = state.stats.lastDailyNum !== null 
+                ? state.stats.lastDailyNum.toString().padStart(6, '0') 
+                : 'None';
+
+            document.getElementById('hdrTotalEP').innerText = state.stats.totalEP;
+            document.getElementById('hdrStreak').innerText = state.stats.currentStreak;
+            document.getElementById('hdrBadges').innerText = `${state.unlockedBadges.size}/${Object.keys(MASTER_BADGES).length}`;
+        }
+
+        function openModal(id) {
+            audio.playClick();
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            audio.playClick();
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        window.onload = function () {
+            loadStorage();
+            initSlotDisplay("000000");
+            checkDailyStatus();
+            updateCountdown();
+        };
+    </script>
+</body>
+</html>
